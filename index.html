@@ -1,0 +1,136 @@
+
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07111f">
+<title>J.A.R.V.I.S.</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#050b14;color:#eaf6ff;font:16px Arial,sans-serif}
+header{padding:20px;background:#0b1d31;border-bottom:1px solid #48b8ff}
+h1{color:#8ceaff;margin:0}
+main{max-width:700px;margin:auto;padding:15px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:15px}
+button{background:#10385a;color:white;border:1px solid #48b8ff;border-radius:9px;padding:10px;cursor:pointer}
+.panel{background:#0a1728;border:1px solid #173957;border-radius:13px;padding:15px;margin-bottom:14px}
+input,textarea{width:100%;padding:12px;background:#06101d;color:white;border:1px solid #245070;border-radius:8px;margin:6px 0}
+#chat{height:260px;overflow:auto}
+.msg{padding:10px;margin:8px 0;border-radius:9px;background:#10304b;white-space:pre-wrap}
+.user{background:#17476c}
+small{color:#91abc0}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+<h1>J.A.R.V.I.S.</h1>
+<p>ASSISTENTE PESSOAL · SISTEMA LOCAL</p>
+</header>
+<main>
+<nav>
+<button onclick="page('inicio')">Painel</button>
+<button onclick="page('conversa')">Conversa</button>
+<button onclick="page('rotina')">Rotina</button>
+<button onclick="page('memoria')">Memória</button>
+</nav>
+
+<section id="inicio" class="panel">
+<h2>Sistema online</h2>
+<p>Assistente pessoal em português brasileiro.</p>
+<p id="clock"></p>
+<p><small>Protótipo local. IA externa ainda não conectada.</small></p>
+</section>
+
+<section id="conversa" class="panel hidden">
+<h2>Conversa</h2>
+<div id="chat"></div>
+<input id="message" placeholder="Digite sua mensagem">
+<button onclick="send()">Enviar</button>
+<button onclick="listen()">🎙 Falar</button>
+<button onclick="readLast()">🔊 Ouvir resposta</button>
+<p id="voiceStatus"><small>O microfone depende do navegador.</small></p>
+</section>
+
+<section id="rotina" class="panel hidden">
+<h2>Minha rotina</h2>
+<div id="tasks"></div>
+<input id="taskInput" placeholder="Nova tarefa">
+<button onclick="addTask()">Adicionar tarefa</button>
+</section>
+
+<section id="memoria" class="panel hidden">
+<h2>Memória local</h2>
+<p><small>As informações ficam neste navegador.</small></p>
+<input id="memoryTitle" placeholder="Título">
+<textarea id="memoryText" placeholder="Informação para guardar"></textarea>
+<button onclick="saveMemory()">Salvar memória</button>
+<div id="memories"></div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const get=(k,f)=>{try{return JSON.parse(localStorage.getItem(k))??f}catch{return f}};
+const put=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+let messages=get("jarvis_messages",[]);
+let tasks=get("jarvis_tasks",[]);
+let memories=get("jarvis_memories",[]);
+let lastAnswer="Olá. Sou o J.A.R.V.I.S. local.";
+function page(id){
+ document.querySelectorAll("main section").forEach(s=>s.classList.add("hidden"));
+ $(id).classList.remove("hidden");
+ render();
+}
+function answer(text){
+ const t=text.toLowerCase();
+ if(t.includes("hora"))return "Agora são "+new Date().toLocaleTimeString("pt-BR");
+ if(t.includes("rotina")||t.includes("tarefa"))return "Abra a aba Rotina para consultar e organizar suas tarefas.";
+ if(t.includes("memória")||t.includes("lembrar"))return "Abra Memória para guardar informações neste dispositivo.";
+ if(t.includes("oi")||t.includes("olá"))return "Olá. Como posso ajudar?";
+ return "Recebi sua mensagem. Esta versão ainda não está conectada a uma IA real. Posso ajudar com comandos básicos, rotina e memória local.";
+}
+function send(){
+ const text=$("message").value.trim();if(!text)return;
+ messages.push({who:"Você",text});
+ lastAnswer=answer(text);messages.push({who:"J.A.R.V.I.S.",text:lastAnswer});
+ put("jarvis_messages",messages);$("message").value="";render();speak(lastAnswer);
+}
+function render(){
+ $("chat").innerHTML=messages.map(m=>'<div class="msg '+(m.who==="Você"?"user":"")+'"><b>'+escapeText(m.who)+'</b><br>'+escapeText(m.text)+'</div>').join("");
+ $("tasks").innerHTML=tasks.map((t,i)=>'<p><label><input style="width:auto" type="checkbox" '+(t.done?"checked":"")+' onchange="toggleTask('+i+',this.checked)"> '+escapeText(t.text)+'</label></p>').join("");
+ $("memories").innerHTML=memories.map((m,i)=>'<div class="msg"><b>'+escapeText(m.title)+'</b><br>'+escapeText(m.text)+'<br><button onclick="deleteMemory('+i+')">Excluir</button></div>').join("");
+}
+function escapeText(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function addTask(){
+ const text=$("taskInput").value.trim();if(!text)return;
+ tasks.push({text,done:false});put("jarvis_tasks",tasks);$("taskInput").value="";render();
+}
+function toggleTask(i,v){tasks[i].done=v;put("jarvis_tasks",tasks);render()}
+function saveMemory(){
+ const title=$("memoryTitle").value.trim(),text=$("memoryText").value.trim();
+ if(!title||!text)return;
+ memories.push({title,text});put("jarvis_memories",memories);
+ $("memoryTitle").value="";$("memoryText").value="";render();
+}
+function deleteMemory(i){memories.splice(i,1);put("jarvis_memories",memories);render()}
+function speak(text){
+ if(!("speechSynthesis"in window))return;
+ speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang="pt-BR";speechSynthesis.speak(u);
+}
+function readLast(){speak(lastAnswer)}
+function listen(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){$("voiceStatus").textContent="Reconhecimento de voz não disponível. Use o microfone do teclado.";return}
+ const r=new SR();r.lang="pt-BR";
+ r.onstart=()=>{$("voiceStatus").textContent="Ouvindo...";};
+ r.onresult=e=>{$("message").value=e.results[0][0].transcript;$("voiceStatus").textContent="Voz reconhecida. Toque em Enviar.";};
+ r.onerror=()=>{$("voiceStatus").textContent="Falha no microfone. Confira as permissões."};
+ r.start();
+}
+$("message").addEventListener("keydown",e=>{if(e.key==="Enter")send()});
+function tick(){$("clock").textContent=new Date().toLocaleString("pt-BR")}
+setInterval(tick,1000);tick();render();
+</script>
+</body>
+</html>
